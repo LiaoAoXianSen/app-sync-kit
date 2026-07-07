@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+packages/*/dist/
+*.tsbuildinfo
+
+# Generated TypeScript/JavaScript artifacts next to sources
+packages/*/src/**/*.js
+packages/*/src/**/*.d.ts
+packages/*/src/**/*.d.ts.map
+
+# Runtime and local configuration
+.env
+.env.*
+*.log
+npm-debug.log*
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Agent working context and local memory
+ai-memory/
+task_plan.md
+findings.md
+progress.md

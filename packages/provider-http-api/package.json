@@ -1,0 +1,10 @@
+{
+  "name": "@app-sync-kit/provider-http-api",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "@app-sync-kit/sync-core": "0.1.0"
+  }
+}

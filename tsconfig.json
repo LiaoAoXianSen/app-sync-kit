@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/sync-core" },
+    { "path": "./packages/provider-webdav" },
+    { "path": "./packages/provider-http-api" },
+    { "path": "./packages/adapter-life-plan" },
+    { "path": "./packages/adapter-wheel-app" }
+  ]
+}

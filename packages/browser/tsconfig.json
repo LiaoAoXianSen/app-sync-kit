@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "references": [
+    { "path": "../sync-core" },
+    { "path": "../provider-webdav" },
+    { "path": "../adapter-life-plan" },
+    { "path": "../adapter-wheel-app" },
+    { "path": "../adapter-pantry-chef" }
+  ],
+  "include": ["src/**/*"]
+}

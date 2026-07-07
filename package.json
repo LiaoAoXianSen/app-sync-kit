@@ -6,10 +6,14 @@
     "packages/*"
   ],
   "devDependencies": {
+    "esbuild": "^0.25.11",
     "typescript": "^5.9.2"
   },
   "scripts": {
     "typecheck": "tsc -b",
-    "build": "tsc -b"
+    "build": "tsc -b && npm run build:browser",
+    "build:browser": "node scripts/build-browser.mjs",
+    "verify": "npm run typecheck && npm run build && npm run verify:behavior",
+    "verify:behavior": "node scripts/verify-browser-bundle.mjs && node scripts/verify-webdav-behavior.mjs"
   }
 }

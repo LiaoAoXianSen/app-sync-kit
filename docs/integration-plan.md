@@ -87,3 +87,12 @@
 - Node + MySQL
 
 前端只切 provider 配置，不重写同步主流程。
+
+## 当前底座补强项
+
+为了让静态项目可以复用同步底座，先在 `app-sync-kit` 内完成：
+
+- `provider-webdav` 在 `PUT` 前尝试 `MKCOL` 父目录，支持首次上传嵌套路径
+- 保持 `legacy-raw-data`，兼容现有人生规划和实验项目的原始 WebDAV JSON
+- 新增 `@app-sync-kit/browser`，生成静态浏览器可引用的 bundle
+- 新增 `adapter-pantry-chef`，只同步 `pantry`、`stapleSeasonings`、`shoppingList`、`preferences`

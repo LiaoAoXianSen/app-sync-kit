@@ -15,7 +15,8 @@ async function request(
   endpoint: string,
   remotePath: string,
   method: string,
-  body?: string
+  body?: string,
+  acceptedStatuses: number[] = [200, 201, 204, 207]
 ): Promise<Response> {
   const base = endpoint.replace(/\/+$/, '/');
   const target = remotePath.replace(/^\/+/, '');
@@ -26,12 +27,41 @@ async function request(
     body
   });
 
-  if (!response.ok && response.status !== 207) {
+  if (!response.ok && !acceptedStatuses.includes(response.status)) {
     const detail = await response.clone().text().catch(() => '');
     throw new Error(`WebDAV ${method} failed: ${response.status}${detail ? ` ${detail.slice(0, 120)}` : ''}`);
   }
 
   return response;
+}
+
+function normalizeRemotePath(remotePath: string): string {
+  return remotePath.startsWith('/') ? remotePath : `/${remotePath}`;
+}
+
+function getParentFolders(remotePath: string): string[] {
+  const segments = normalizeRemotePath(remotePath).split('/').filter(Boolean).slice(0, -1);
+  const folders: string[] = [];
+  let current = '';
+
+  segments.forEach((segment) => {
+    current += `/${segment}`;
+    folders.push(current);
+  });
+
+  return folders;
+}
+
+async function ensureRemoteFolders(
+  fetchImpl: typeof fetch,
+  endpoint: string,
+  remotePath: string
+): Promise<void> {
+  const folders = getParentFolders(remotePath);
+
+  for (const folder of folders) {
+    await request(fetchImpl, endpoint, folder, 'MKCOL', undefined, [200, 201, 204, 207, 405]);
+  }
 }
 
 function toEnvelope<TData>(
@@ -79,12 +109,13 @@ export function createWebdavProvider<TData>(
       }
     },
     async push(config, document) {
-      const remotePath = config.remotePath.startsWith('/') ? config.remotePath : `/${config.remotePath}`;
+      const remotePath = normalizeRemotePath(config.remotePath);
       const payload =
         config.writeMode === 'legacy-raw-data'
           ? JSON.stringify(document.data, null, 2)
           : JSON.stringify(document, null, 2);
 
+      await ensureRemoteFolders(fetchImpl, config.endpoint, remotePath);
       await request(fetchImpl, config.endpoint, remotePath, 'PUT', payload);
 
       return {
@@ -93,7 +124,7 @@ export function createWebdavProvider<TData>(
       };
     },
     async healthCheck(config) {
-      const remotePath = config.remotePath.startsWith('/') ? config.remotePath : `/${config.remotePath}`;
+      const remotePath = normalizeRemotePath(config.remotePath);
       const folderPath = remotePath.split('/').slice(0, -1).join('/') || '/';
       await request(fetchImpl, config.endpoint, folderPath, 'PROPFIND');
     }

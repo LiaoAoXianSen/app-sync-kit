@@ -19,12 +19,13 @@
 
 ## 最终架构
 
-采用四层结构：
+采用五层结构：
 
 1. 业务数据层
 2. 同步核心层 `sync-core`
 3. 远端 provider 层
 4. 业务 adapter 层
+5. 浏览器分发层 `@app-sync-kit/browser`
 
 ### 1. 业务数据层
 
@@ -67,6 +68,13 @@ provider 只负责“怎么跟远端说话”。
 - `provider-http-api`
   作为未来后端服务入口，由 Java / Node 服务再去连 MySQL
 
+WebDAV provider 必须同时支持两种远端文件格式：
+
+- `wrapped-document`：正式的 `RemoteDocument { appId, schemaVersion, updatedAt, data }`
+- `legacy-raw-data`：现有静态项目直接上传的业务 JSON
+
+`legacy-raw-data` 用于兼容已经部署的 Worker/WebDAV 文件，例如人生规划和低风险实验项目的原始 JSON。
+
 结论：
 
 前端永远不直接兼容 MySQL。
@@ -83,6 +91,18 @@ provider 只负责“怎么跟远端说话”。
 - 更新时间怎么取
 - 删除记录怎么表示
 - 默认远端路径是什么
+
+### 5. 浏览器分发层
+
+静态项目不一定有构建系统，所以 `@app-sync-kit/browser` 提供聚合入口和单文件浏览器 bundle。
+
+它负责组合：
+
+- `sync-core`
+- `provider-webdav`
+- 已发布 adapter
+
+并提供 `createBrowserWebdavSyncManager` 这种浏览器友好的入口。该入口默认使用 `legacy-raw-data`，避免接入现有 WebDAV JSON 时改变远端文件结构。
 
 ## 对 MySQL 的预留方式
 

@@ -1,0 +1,23 @@
+{
+  "name": "@app-sync-kit/browser",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "browser": "dist/app-sync-kit.browser.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./browser": "./dist/app-sync-kit.browser.js",
+    "./browser-global": "./dist/app-sync-kit.browser.global.js"
+  },
+  "dependencies": {
+    "@app-sync-kit/adapter-life-plan": "0.1.0",
+    "@app-sync-kit/adapter-pantry-chef": "0.1.0",
+    "@app-sync-kit/adapter-wheel-app": "0.1.0",
+    "@app-sync-kit/provider-webdav": "0.1.0",
+    "@app-sync-kit/sync-core": "0.1.0"
+  }
+}

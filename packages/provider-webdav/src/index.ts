@@ -18,7 +18,7 @@ async function request(
   body?: string,
   acceptedStatuses: number[] = [200, 201, 204, 207]
 ): Promise<Response> {
-  const base = endpoint.replace(/\/+$/, '/');
+  const base = `${endpoint.replace(/\/+$/, '')}/`;
   const target = remotePath.replace(/^\/+/, '');
   const response = await fetchImpl(base + target, {
     method,

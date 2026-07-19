@@ -1,17 +1,20 @@
 import { createHash } from './hash';
-import type {
-  RemoteDocument,
-  SyncAdapter,
-  SyncDirection,
-  SyncManagerOptions,
-  SyncMetadata,
-  SyncRunResult
+import {
+  isConditionalWriteConflict,
+  type RemoteDocument,
+  type RemoteDocumentEnvelope,
+  type SyncAdapter,
+  type SyncDirection,
+  type SyncManagerOptions,
+  type SyncMetadata,
+  type SyncRunResult
 } from './types';
 
 const DEFAULT_METADATA: SyncMetadata = {
   dirty: false,
   lastLocalHash: '',
   lastRemoteHash: '',
+  lastRemoteEtag: '',
   lastSyncAt: null,
   lastPullAt: null,
   lastPushAt: null,
@@ -68,7 +71,8 @@ export class SyncManager<TData, TProviderConfig> {
     const metadata = this.storage.loadMetadata(DEFAULT_METADATA);
     return {
       ...DEFAULT_METADATA,
-      ...metadata
+      ...metadata,
+      lastRemoteEtag: metadata.lastRemoteEtag || ''
     };
   }
 
@@ -85,30 +89,60 @@ export class SyncManager<TData, TProviderConfig> {
     const remoteEnvelope = await this.provider.pull(config);
     const remoteDocument = remoteEnvelope?.document ?? null;
     const remoteHash = remoteEnvelope?.hash ?? '';
+    const remoteEtag = remoteEnvelope?.etag || '';
+
+    // Align with life-plan-site: never treat "no baseline" as local-only change
+    // when remote already exists. That was overwriting cloud with seed data.
     const localChanged =
       metadata.dirty ||
       (!!metadata.lastRemoteHash && localHash !== metadata.lastRemoteHash) ||
-      !metadata.lastRemoteHash;
+      (!metadata.lastRemoteHash && !!remoteDocument && localHash !== remoteHash);
     const remoteChanged =
-      !!remoteEnvelope &&
-      !!metadata.lastRemoteHash &&
-      remoteHash !== metadata.lastRemoteHash;
+      !!remoteDocument &&
+      ((!!metadata.lastRemoteHash && remoteHash !== metadata.lastRemoteHash) ||
+        (!metadata.lastRemoteHash && remoteHash !== localHash));
 
     if (direction === 'up') {
-      return this.pushCurrentData(config, localData, metadata, localHash, remoteDocument, remoteHash);
+      return this.pushCurrentData(config, localData, metadata, localHash, remoteDocument, remoteHash, remoteEtag);
     }
 
     if (direction === 'down') {
-      return this.pullRemoteData(localData, metadata, localHash, remoteDocument, remoteHash);
+      return this.pullRemoteData(localData, metadata, localHash, remoteDocument, remoteHash, remoteEtag);
     }
 
     if (!remoteDocument) {
-      return this.pushCurrentData(config, localData, metadata, localHash, null, '');
+      return this.pushCurrentData(config, localData, metadata, localHash, null, '', '');
+    }
+
+    // First contact with existing remote and no local dirty edits:
+    // adopt cloud as source of truth (do not merge/push local seed data).
+    if (!metadata.lastRemoteHash && !metadata.dirty) {
+      if (localHash === remoteHash) {
+        const nextMetadata = {
+          ...metadata,
+          dirty: false,
+          lastLocalHash: localHash,
+          lastRemoteHash: remoteHash,
+          lastRemoteEtag: remoteEtag || metadata.lastRemoteEtag || '',
+          lastPullAt: this.nowIso(),
+          lastSyncAt: this.nowIso()
+        };
+        this.storage.saveMetadata(nextMetadata);
+        return {
+          action: 'idle',
+          data: localData,
+          metadata: nextMetadata,
+          document: remoteDocument
+        };
+      }
+      return this.pullRemoteData(localData, metadata, localHash, remoteDocument, remoteHash, remoteEtag);
     }
 
     if (!localChanged && !remoteChanged) {
       const nextMetadata = {
         ...metadata,
+        lastRemoteHash: remoteHash || metadata.lastRemoteHash,
+        lastRemoteEtag: remoteEtag || metadata.lastRemoteEtag || '',
         lastPullAt: this.nowIso()
       };
       this.storage.saveMetadata(nextMetadata);
@@ -121,36 +155,16 @@ export class SyncManager<TData, TProviderConfig> {
       };
     }
 
-    if (!localChanged) {
-      return this.pullRemoteData(localData, metadata, localHash, remoteDocument, remoteHash);
+    if (!localChanged && remoteChanged) {
+      return this.pullRemoteData(localData, metadata, localHash, remoteDocument, remoteHash, remoteEtag);
     }
 
-    if (!remoteChanged) {
-      return this.pushCurrentData(config, localData, metadata, localHash, remoteDocument, remoteHash);
+    if (localChanged && !remoteChanged) {
+      return this.pushCurrentData(config, localData, metadata, localHash, remoteDocument, remoteHash, remoteEtag);
     }
 
-    const mergedData = this.adapter.merge(localData, remoteDocument.data);
-    const mergedHash = this.adapter.getHash(mergedData);
-    this.storage.saveData(mergedData);
-
-    const pushed = await this.provider.push(config, this.createDocument(mergedData));
-    const nextMetadata = {
-      ...metadata,
-      dirty: false,
-      lastLocalHash: mergedHash,
-      lastRemoteHash: pushed.hash,
-      lastPushAt: this.nowIso(),
-      lastSyncAt: this.nowIso(),
-      lastConflictAt: this.nowIso()
-    };
-    this.storage.saveMetadata(nextMetadata);
-
-    return {
-      action: 'merged-then-uploaded',
-      data: mergedData,
-      metadata: nextMetadata,
-      document: pushed.document
-    };
+    // Both sides changed (or first sync with different content): merge first.
+    return this.mergeAndUpload(config, localData, remoteDocument, metadata, remoteHash, remoteEtag);
   }
 
   private async pullRemoteData(
@@ -158,7 +172,8 @@ export class SyncManager<TData, TProviderConfig> {
     metadata: SyncMetadata,
     localHash: string,
     remoteDocument: RemoteDocument<TData> | null,
-    remoteHash: string
+    remoteHash: string,
+    remoteEtag = ''
   ): Promise<SyncRunResult<TData>> {
     if (!remoteDocument) {
       return {
@@ -169,6 +184,7 @@ export class SyncManager<TData, TProviderConfig> {
       };
     }
 
+    // Only merge when local still has unsynced edits; otherwise adopt remote wholesale.
     const shouldMerge = metadata.dirty && localHash !== remoteHash;
     const nextData = shouldMerge ? this.adapter.merge(localData, remoteDocument.data) : remoteDocument.data;
     const nextHash = this.adapter.getHash(nextData);
@@ -176,11 +192,12 @@ export class SyncManager<TData, TProviderConfig> {
 
     const nextMetadata = {
       ...metadata,
-      dirty: shouldMerge,
+      dirty: shouldMerge && nextHash !== remoteHash,
       lastLocalHash: nextHash,
       lastRemoteHash: remoteHash,
+      lastRemoteEtag: remoteEtag || metadata.lastRemoteEtag || '',
       lastPullAt: this.nowIso(),
-      lastSyncAt: shouldMerge ? metadata.lastSyncAt : this.nowIso(),
+      lastSyncAt: shouldMerge && nextHash !== remoteHash ? metadata.lastSyncAt : this.nowIso(),
       lastConflictAt: shouldMerge ? this.nowIso() : metadata.lastConflictAt
     };
     this.storage.saveMetadata(nextMetadata);
@@ -199,18 +216,87 @@ export class SyncManager<TData, TProviderConfig> {
     metadata: SyncMetadata,
     localHash: string,
     remoteDocument: RemoteDocument<TData> | null,
-    remoteHash: string
+    remoteHash: string,
+    remoteEtag = '',
+    options: { retryOnConditionalConflict?: boolean } = {}
   ): Promise<SyncRunResult<TData>> {
+    // Remote diverged from our last known baseline: merge before upload.
     if (remoteDocument && remoteHash && remoteHash !== localHash && remoteHash !== metadata.lastRemoteHash) {
-      const mergedData = this.adapter.merge(localData, remoteDocument.data);
-      const mergedHash = this.adapter.getHash(mergedData);
-      this.storage.saveData(mergedData);
-      const pushed = await this.provider.push(config, this.createDocument(mergedData));
+      return this.mergeAndUpload(config, localData, remoteDocument, metadata, remoteHash, remoteEtag, options);
+    }
+
+    // First contact with different remote content during forced up: still merge.
+    if (remoteDocument && !metadata.lastRemoteHash && remoteHash && remoteHash !== localHash) {
+      return this.mergeAndUpload(config, localData, remoteDocument, metadata, remoteHash, remoteEtag, options);
+    }
+
+    try {
+      const pushed = await this.provider.push(config, this.createDocument(localData), {
+        ifMatch: remoteEtag || metadata.lastRemoteEtag || ''
+      });
+      const nextMetadata = {
+        ...metadata,
+        dirty: false,
+        lastLocalHash: localHash,
+        lastRemoteHash: pushed.hash,
+        lastRemoteEtag: pushed.etag || remoteEtag || metadata.lastRemoteEtag || '',
+        lastPushAt: this.nowIso(),
+        lastSyncAt: this.nowIso()
+      };
+      this.storage.saveMetadata(nextMetadata);
+
+      return {
+        action: remoteDocument ? 'uploaded' : 'bootstrapped-remote',
+        data: localData,
+        metadata: nextMetadata,
+        document: pushed.document
+      };
+    } catch (error) {
+      if (
+        options.retryOnConditionalConflict !== false &&
+        isConditionalWriteConflict(error)
+      ) {
+        const latest = await this.provider.pull(config);
+        if (!latest?.document) {
+          throw error;
+        }
+        return this.mergeAndUpload(
+          config,
+          localData,
+          latest.document,
+          metadata,
+          latest.hash,
+          latest.etag || '',
+          { retryOnConditionalConflict: false }
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async mergeAndUpload(
+    config: TProviderConfig,
+    localData: TData,
+    remoteDocument: RemoteDocument<TData>,
+    metadata: SyncMetadata,
+    remoteHash: string,
+    remoteEtag = '',
+    options: { retryOnConditionalConflict?: boolean } = {}
+  ): Promise<SyncRunResult<TData>> {
+    const mergedData = this.adapter.merge(localData, remoteDocument.data);
+    const mergedHash = this.adapter.getHash(mergedData);
+    this.storage.saveData(mergedData);
+
+    try {
+      const pushed = await this.provider.push(config, this.createDocument(mergedData), {
+        ifMatch: remoteEtag || metadata.lastRemoteEtag || ''
+      });
       const nextMetadata = {
         ...metadata,
         dirty: false,
         lastLocalHash: mergedHash,
         lastRemoteHash: pushed.hash,
+        lastRemoteEtag: pushed.etag || remoteEtag || metadata.lastRemoteEtag || '',
         lastPushAt: this.nowIso(),
         lastSyncAt: this.nowIso(),
         lastConflictAt: this.nowIso()
@@ -223,25 +309,42 @@ export class SyncManager<TData, TProviderConfig> {
         metadata: nextMetadata,
         document: pushed.document
       };
+    } catch (error) {
+      if (
+        options.retryOnConditionalConflict !== false &&
+        isConditionalWriteConflict(error)
+      ) {
+        const latest = await this.provider.pull(config);
+        if (!latest?.document) {
+          throw error;
+        }
+        // Merge against the freshest remote, then upload once more without further retry.
+        const rematched = this.adapter.merge(mergedData, latest.document.data);
+        this.storage.saveData(rematched);
+        const pushed = await this.provider.push(config, this.createDocument(rematched), {
+          ifMatch: latest.etag || ''
+        });
+        const rematchedHash = this.adapter.getHash(rematched);
+        const nextMetadata = {
+          ...metadata,
+          dirty: false,
+          lastLocalHash: rematchedHash,
+          lastRemoteHash: pushed.hash,
+          lastRemoteEtag: pushed.etag || latest.etag || '',
+          lastPushAt: this.nowIso(),
+          lastSyncAt: this.nowIso(),
+          lastConflictAt: this.nowIso()
+        };
+        this.storage.saveMetadata(nextMetadata);
+        return {
+          action: 'merged-then-uploaded',
+          data: rematched,
+          metadata: nextMetadata,
+          document: pushed.document
+        };
+      }
+      throw error;
     }
-
-    const pushed = await this.provider.push(config, this.createDocument(localData));
-    const nextMetadata = {
-      ...metadata,
-      dirty: false,
-      lastLocalHash: localHash,
-      lastRemoteHash: pushed.hash,
-      lastPushAt: this.nowIso(),
-      lastSyncAt: this.nowIso()
-    };
-    this.storage.saveMetadata(nextMetadata);
-
-    return {
-      action: remoteDocument ? 'uploaded' : 'bootstrapped-remote',
-      data: localData,
-      metadata: nextMetadata,
-      document: pushed.document
-    };
   }
 
   private createDocument(data: TData): RemoteDocument<TData> {

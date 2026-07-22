@@ -21,7 +21,9 @@ const pantryNormalizedKeys = Object.keys(
 
 assert.equal(typeof kit.createBrowserWebdavSyncManager, 'function');
 assert.equal(typeof kit.createWebdavProvider, 'function');
-assert.deepEqual(adapterKeys, ['lifePlan', 'pantryChef', 'wheelApp']);
+assert.deepEqual(adapterKeys, ['habitApp', 'lifePlan', 'pantryChef', 'wheelApp']);
+assert.equal(kit.adapters.habitApp.getDefaultRemotePath(), '/apps/habit-app/data.json');
+assert.equal(kit.habitAppAdapter.getDefaultRemotePath(), '/apps/habit-app/data.json');
 assert.equal(kit.adapters.pantryChef.getDefaultRemotePath(), '/apps/pantry-chef/data.json');
 assert.deepEqual(pantryDefaultKeys, ['pantry', 'preferences', 'shoppingList', 'stapleSeasonings']);
 assert.deepEqual(pantryNormalizedKeys, ['pantry', 'preferences', 'shoppingList', 'stapleSeasonings']);

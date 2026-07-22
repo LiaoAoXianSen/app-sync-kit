@@ -10,6 +10,7 @@
     { "path": "../provider-webdav" },
     { "path": "../adapter-life-plan" },
     { "path": "../adapter-wheel-app" },
+    { "path": "../adapter-habit-app" },
     { "path": "../adapter-pantry-chef" }
   ],
   "include": ["src/**/*"]

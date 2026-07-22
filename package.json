@@ -14,6 +14,9 @@
     "build": "tsc -b && npm run build:browser",
     "build:browser": "node scripts/build-browser.mjs",
     "verify": "npm run typecheck && npm run build && npm run verify:behavior",
-    "verify:behavior": "node scripts/verify-browser-bundle.mjs && node scripts/verify-webdav-behavior.mjs && node scripts/verify-life-plan-behavior.mjs && node scripts/verify-wheel-sync-safety.mjs"
+    "verify:behavior": "node scripts/verify-browser-bundle.mjs && node scripts/verify-webdav-behavior.mjs && node scripts/verify-life-plan-behavior.mjs && node scripts/verify-wheel-sync-safety.mjs && node scripts/verify-habit-sync-safety.mjs"
+  },
+  "dependencies": {
+    "life-plan-site": "file:../life-plan-site"
   }
 }

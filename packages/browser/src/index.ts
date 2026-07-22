@@ -1,3 +1,4 @@
+import { habitAppAdapter } from '@app-sync-kit/adapter-habit-app';
 import { lifePlanAdapter } from '@app-sync-kit/adapter-life-plan';
 import { pantryChefAdapter } from '@app-sync-kit/adapter-pantry-chef';
 import { wheelAppAdapter } from '@app-sync-kit/adapter-wheel-app';
@@ -11,11 +12,13 @@ import {
   type SyncManagerOptions
 } from '@app-sync-kit/sync-core';
 
+export { habitAppAdapter } from '@app-sync-kit/adapter-habit-app';
 export { lifePlanAdapter } from '@app-sync-kit/adapter-life-plan';
 export { pantryChefAdapter } from '@app-sync-kit/adapter-pantry-chef';
 export { wheelAppAdapter } from '@app-sync-kit/adapter-wheel-app';
 export { createWebdavProvider } from '@app-sync-kit/provider-webdav';
 export { createBrowserSyncStorage, createHash, SyncManager } from '@app-sync-kit/sync-core';
+export type { HabitSnapshot } from '@app-sync-kit/adapter-habit-app';
 export type { LifePlanData, LifePlanItem } from '@app-sync-kit/adapter-life-plan';
 export type { PantryChefData, PantryChefItem } from '@app-sync-kit/adapter-pantry-chef';
 export type { WheelSnapshot } from '@app-sync-kit/adapter-wheel-app';
@@ -68,6 +71,7 @@ export function createBrowserWebdavSyncManager<TData>(
 }
 
 export const adapters = {
+  habitApp: habitAppAdapter,
   lifePlan: lifePlanAdapter,
   pantryChef: pantryChefAdapter,
   wheelApp: wheelAppAdapter

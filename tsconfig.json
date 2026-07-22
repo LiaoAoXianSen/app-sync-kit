@@ -6,6 +6,7 @@
     { "path": "./packages/provider-http-api" },
     { "path": "./packages/adapter-life-plan" },
     { "path": "./packages/adapter-wheel-app" },
+    { "path": "./packages/adapter-habit-app" },
     { "path": "./packages/adapter-pantry-chef" },
     { "path": "./packages/browser" }
   ]

@@ -431,4 +431,42 @@ const seedLocal = {
   assert.deepEqual(flags.overdue_break, [false, false]);
 }
 
+// 12) Transport-only fields cannot create a perpetual remote-change loop.
+{
+  const canonicalRemote = {
+    ...empty,
+    habits: [habit('h-canonical', '2026-11-01T08:00:00.000Z', '规范习惯')]
+  };
+  const transportRemote = {
+    ...canonicalRemote,
+    schemaVersion: 1,
+    generatedAt: '2026-11-01T09:00:00.000Z',
+    habits: canonicalRemote.habits.map((entry) => ({ ...entry, legacyOnlyNote: 'ignored by adapter' }))
+  };
+  const provider = createProvider(transportRemote);
+  const originalPull = provider.pull.bind(provider);
+  provider.pull = async () => {
+    const envelope = await originalPull();
+    return envelope ? { ...envelope, hash: 'transport-hash-that-must-not-drive-sync' } : null;
+  };
+  const storage = createMemoryStorage(empty, { dirty: false, lastRemoteHash: '' });
+  const manager = new SyncManager({
+    adapter: habitAppAdapter,
+    provider,
+    storage,
+    defaultProviderConfig: {
+      endpoint: 'https://example.test',
+      remotePath: '/apps/habit-app/data.json',
+      writeMode: 'legacy-raw-data'
+    }
+  });
+
+  const first = await manager.sync('both');
+  assert.equal(first.action, 'downloaded');
+  assert.equal(first.metadata.lastRemoteHash, habitAppAdapter.getHash(transportRemote));
+  const second = await manager.sync('both');
+  assert.equal(second.action, 'idle', 'normalized remote content should be stable on the next sync');
+  assert.equal(provider.putCount, 0, 'ignored transport fields must not trigger a rewrite');
+}
+
 console.log('habit sync safety checks passed');

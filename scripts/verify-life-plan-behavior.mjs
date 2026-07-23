@@ -126,4 +126,22 @@ assert.equal(
   true
 );
 
+const tieMerged = lifePlan.merge(
+  lifePlan.normalizeData({
+    todos: [{ id: 'unstamped-todo', text: '本地无时间戳内容' }],
+    records: [{ id: 'unstamped-record', title: '无时间戳记录', content: '本地版本' }],
+    wheels: [{ id: 'equal-wheel', name: '本地转盘', updatedAt: freshStamp, items: [] }]
+  }),
+  lifePlan.normalizeData({
+    todos: [{ id: 'unstamped-todo', text: '远端旧备份内容' }],
+    records: [{ id: 'unstamped-record', title: '无时间戳记录', content: '远端版本' }],
+    wheels: [{ id: 'equal-wheel', name: '远端同时间转盘', updatedAt: freshStamp, items: [] }]
+  })
+);
+
+assert.equal(tieMerged.todos.find((item) => item.id === 'unstamped-todo').text, '本地无时间戳内容');
+assert.equal(tieMerged.records.find((item) => item.id === 'unstamped-record').content, '本地版本');
+assert.equal(tieMerged.records.find((item) => item.conflictOf === 'unstamped-record').content, '远端版本');
+assert.equal(tieMerged.wheels.find((item) => item.id === 'equal-wheel').name, '本地转盘');
+
 console.log('Life-plan adapter behavior verified.');

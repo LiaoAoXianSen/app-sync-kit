@@ -132,7 +132,7 @@ function mergeArrayByIdentity(
   remoteItems.forEach((remoteItem, index) => {
     const key = getItemMergeKey(remoteItem, index, collection);
     const localItem = merged.get(key);
-    if (!localItem || getItemUpdatedTime(remoteItem) >= getItemUpdatedTime(localItem)) {
+    if (!localItem || getItemUpdatedTime(remoteItem) > getItemUpdatedTime(localItem)) {
       merged.set(key, remoteItem);
     }
   });
@@ -205,7 +205,7 @@ function mergeRecordPair(localRecord: LifePlanItem, remoteRecord: LifePlanItem, 
   const remoteText = normalizeRecordMergeText(getString(remoteRecord, 'content'));
   const localTime = getItemUpdatedTime(localRecord);
   const remoteTime = getItemUpdatedTime(remoteRecord);
-  const latest = remoteTime >= localTime ? remoteRecord : localRecord;
+  const latest = remoteTime > localTime ? remoteRecord : localRecord;
   const older = latest === remoteRecord ? localRecord : remoteRecord;
   const olderSource = older === localRecord ? '本地' : '云端';
 
@@ -292,7 +292,7 @@ function mergeWheelEntities(
   [...localItems, ...remoteItems].forEach((item, index) => {
     const key = getString(item, 'id') || JSON.stringify(item) || String(index);
     const current = merged.get(key);
-    if (!current || getWheelEntityUpdatedTime(item) >= getWheelEntityUpdatedTime(current)) {
+    if (!current || getWheelEntityUpdatedTime(item) > getWheelEntityUpdatedTime(current)) {
       merged.set(key, item);
     }
   });
@@ -317,7 +317,7 @@ function mergeWheelSnapshots(localSnapshot: Partial<LifePlanData>, remoteSnapsho
         ? remoteWheel
         : !remoteWheel
           ? localWheel
-          : getWheelEntityUpdatedTime(remoteWheel) >= getWheelEntityUpdatedTime(localWheel)
+          : getWheelEntityUpdatedTime(remoteWheel) > getWheelEntityUpdatedTime(localWheel)
             ? remoteWheel
             : localWheel;
 

@@ -88,7 +88,10 @@ export class SyncManager<TData, TProviderConfig> {
     const localHash = this.adapter.getHash(localData);
     const remoteEnvelope = await this.provider.pull(config);
     const remoteDocument = remoteEnvelope?.document ?? null;
-    const remoteHash = remoteEnvelope?.hash ?? '';
+    // Providers hash transport payloads, while adapters hash normalized domain data.
+    // Keep every sync decision in the adapter's hash domain so ignored legacy or
+    // extension fields cannot cause perpetual false remote changes.
+    const remoteHash = remoteDocument ? this.adapter.getHash(remoteDocument.data) : '';
     const remoteEtag = remoteEnvelope?.etag || '';
 
     // Align with life-plan-site: never treat "no baseline" as local-only change
@@ -238,7 +241,7 @@ export class SyncManager<TData, TProviderConfig> {
         ...metadata,
         dirty: false,
         lastLocalHash: localHash,
-        lastRemoteHash: pushed.hash,
+        lastRemoteHash: localHash,
         lastRemoteEtag: pushed.etag || remoteEtag || metadata.lastRemoteEtag || '',
         lastPushAt: this.nowIso(),
         lastSyncAt: this.nowIso()
@@ -265,7 +268,7 @@ export class SyncManager<TData, TProviderConfig> {
           localData,
           latest.document,
           metadata,
-          latest.hash,
+          this.adapter.getHash(latest.document.data),
           latest.etag || '',
           { retryOnConditionalConflict: false }
         );
@@ -295,7 +298,7 @@ export class SyncManager<TData, TProviderConfig> {
         ...metadata,
         dirty: false,
         lastLocalHash: mergedHash,
-        lastRemoteHash: pushed.hash,
+        lastRemoteHash: mergedHash,
         lastRemoteEtag: pushed.etag || remoteEtag || metadata.lastRemoteEtag || '',
         lastPushAt: this.nowIso(),
         lastSyncAt: this.nowIso(),
@@ -329,7 +332,7 @@ export class SyncManager<TData, TProviderConfig> {
           ...metadata,
           dirty: false,
           lastLocalHash: rematchedHash,
-          lastRemoteHash: pushed.hash,
+          lastRemoteHash: rematchedHash,
           lastRemoteEtag: pushed.etag || latest.etag || '',
           lastPushAt: this.nowIso(),
           lastSyncAt: this.nowIso(),
